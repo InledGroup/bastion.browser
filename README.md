@@ -9,6 +9,11 @@
 [![React](https://img.shields.io/badge/React-18-61dafb.svg)](https://reactjs.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-Backend-339933.svg)](https://nodejs.org/)
 
+> [!WARNING]
+> **Work in Progress / Early Beta**  
+> This project is currently under construction and in a very early beta stage. Expect frequent updates, potential bugs, and incomplete features.
+
+
 **Bastion Browser** is an advanced **Remote Browser Isolation (RBI)** solution designed to provide an impenetrable security layer between the user and threats from the public web. By running browsing sessions in an isolated container on the server and streaming only an interactive visual feed, Bastion eliminates the risk of malicious code execution directly on the local machine.
 
 ---
