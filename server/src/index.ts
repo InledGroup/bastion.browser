@@ -353,6 +353,71 @@ wss.on('connection', async (ws: WebSocket, req) => {
         language: 'es-ES'
     };
 
+    const setupPage = async (page: Page, id: string) => {
+        const lang = sessionConfig.language;
+        
+        // Emulate language before navigation
+        await page.evaluateOnNewDocument((l: string) => {
+            Object.defineProperty(navigator, 'language', { get: () => l, configurable: true });
+            Object.defineProperty(navigator, 'languages', { get: () => [l, l.split('-')[0]], configurable: true });
+        }, lang).catch(() => {});
+
+        await page.setExtraHTTPHeaders({
+            'Accept-Language': `${lang},${lang.split('-')[0]};q=0.9,en;q=0.8`
+        }).catch(() => {});
+
+        // Handle file selection requests
+        page.on('filechooser', async (fileChooser) => {
+            console.log('File selection requested by page');
+            pendingFileChoosers.set(id, fileChooser as any);
+            ws.send(JSON.stringify({ type: 'file_requested', id, multiple: (fileChooser as any).isMultiple() }));
+        });
+
+        // Set download behavior for this specific session
+        try {
+            const client = await page.target().createCDPSession();
+            await client.send('Page.setDownloadBehavior', {
+                behavior: 'allow',
+                downloadPath: sessionDir,
+            });
+        } catch (e) {
+            console.error('Failed to set download behavior:', e);
+        }
+
+        await page.setViewport({ width: 1280, height: 720 }).catch(() => {});
+        
+        page.on('domcontentloaded', async () => {
+            const title = await page.title().catch(() => '');
+            ws.send(JSON.stringify({ type: 'title_changed', id, title: title || 'New Tab' }));
+        });
+
+        page.on('load', () => {
+            ws.send(JSON.stringify({ type: 'loading_stop', id }));
+        });
+
+        page.on('framenavigated', (frame: Frame) => {
+            if (frame === page.mainFrame()) {
+                ws.send(JSON.stringify({ type: 'url_changed', url: page.url(), id }));
+            }
+        });
+    };
+
+    // Listen for new targets (e.g. window.open)
+    context.on('targetcreated', async (target: any) => {
+        if (target.type() === 'page') {
+            const newPage = await target.page();
+            if (newPage) {
+                const id = target._targetId;
+                if (!sessionPages.has(id)) {
+                    console.log(`New page detected: ${id}`);
+                    await setupPage(newPage, id);
+                    sessionPages.set(id, newPage);
+                    ws.send(JSON.stringify({ type: 'tab_created', id }));
+                }
+            }
+        }
+    });
+
     // Send the assigned sessionId back to client
     ws.send(JSON.stringify({ type: 'session_ready', sessionId }));
 
@@ -384,59 +449,22 @@ wss.on('connection', async (ws: WebSocket, req) => {
                 case 'create_tab': {
                     if (sessionPages.size >= MAX_TABS) return;
                     const page = await context.newPage();
-                    const lang = sessionConfig.language;
+                    const id = (page as any).target()._targetId;
                     
-                    // Emulate language before navigation
-                    await page.evaluateOnNewDocument((l: string) => {
-                        Object.defineProperty(navigator, 'language', { get: () => l, configurable: true });
-                        Object.defineProperty(navigator, 'languages', { get: () => [l, l.split('-')[0]], configurable: true });
-                    }, lang);
-
-                    await page.setExtraHTTPHeaders({
-                        'Accept-Language': `${lang},${lang.split('-')[0]};q=0.9,en;q=0.8`
-                    });
-
-                    // Handle file selection requests
-                    page.on('filechooser', async (fileChooser: FileChooser) => {
-                        console.log('File selection requested by page');
-                        const id = (page as any).target()._targetId;
-                        pendingFileChoosers.set(id, fileChooser);
-                        ws.send(JSON.stringify({ type: 'file_requested', id, multiple: fileChooser.isMultiple() }));
-                    });
-
-                    // Set download behavior for this specific session
-                    const client = await page.target().createCDPSession();
-                    await client.send('Page.setDownloadBehavior', {
-                        behavior: 'allow',
-                        downloadPath: sessionDir,
-                    });
-
-                    await page.setViewport({ width: 1280, height: 720 });
-                    const id = (page as any).target()._targetId; 
-                    sessionPages.set(id, page);
-                    
-                    page.on('domcontentloaded', async () => {
-                        const title = await page.title();
-                        ws.send(JSON.stringify({ type: 'title_changed', id, title: title || 'New Tab' }));
-                    });
-
-                    page.on('load', () => {
-                        ws.send(JSON.stringify({ type: 'loading_stop', id }));
-                    });
-
-                    page.on('framenavigated', (frame: Frame) => {
-                        if (frame === page.mainFrame()) {
-                            ws.send(JSON.stringify({ type: 'url_changed', url: page.url(), id }));
-                        }
-                    });
+                    if (!sessionPages.has(id)) {
+                        await setupPage(page, id);
+                        sessionPages.set(id, page);
+                        // tab_created will be sent by targetcreated listener or here
+                        // to be safe and avoid duplicates, let's check if we already sent it
+                        ws.send(JSON.stringify({ type: 'tab_created', id }));
+                    }
 
                     const targetUrl = data.url || 'about:blank';
                     if (targetUrl !== 'about:blank') {
                         ws.send(JSON.stringify({ type: 'loading_start', id }));
+                        await page.goto(targetUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
                     }
-                    await page.goto(targetUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
                     
-                    ws.send(JSON.stringify({ type: 'tab_created', id }));
                     ws.send(JSON.stringify({ type: 'loading_stop', id }));
                     break;
                 }

@@ -114,6 +114,12 @@ function App() {
 
     const [showSettings, setShowSettings] = useState(false);
     const [language, setLanguage] = useState(localStorage.getItem('browser-lang') || 'es-ES');
+    const languageRef = useRef(language);
+    
+    useEffect(() => {
+        languageRef.current = language;
+    }, [language]);
+    
     const t = translations[language] || translations['es-ES'];
 
     const [apiKey, setApiKey] = useState(localStorage.getItem('browser-api-key') || '');
@@ -127,20 +133,38 @@ function App() {
     const containerRef = useRef<HTMLDivElement>(null);
     const activeTabIdRef = useRef<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const sessionIdRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        sessionIdRef.current = sessionId;
+    }, [sessionId]);
 
     const fetchDownloads = useCallback(async () => {
         const currentKey = localStorage.getItem('browser-api-key') || apiKey;
-        if (!currentKey || !sessionId) return;
+        const currentSessionId = sessionIdRef.current || sessionId;
+        
+        if (!currentKey || !currentSessionId) {
+            console.log('Skipping fetchDownloads: missing key or sessionId', { currentKey: !!currentKey, currentSessionId: !!currentSessionId });
+            return;
+        }
+        
         try {
-            const response = await fetch(`/api/downloads?api_key=${encodeURIComponent(currentKey)}&sessionId=${sessionId}`);
+            const response = await fetch(`/api/downloads?api_key=${encodeURIComponent(currentKey)}&sessionId=${currentSessionId}`);
             if (response.ok) {
                 const data = await response.json();
                 setDownloads(data);
+            } else {
+                console.error('Failed to fetch downloads:', response.status);
             }
         } catch (e) {
             console.error('Failed to fetch downloads', e);
         }
     }, [apiKey, sessionId]);
+
+    const fetchDownloadsRef = useRef(fetchDownloads);
+    useEffect(() => {
+        fetchDownloadsRef.current = fetchDownloads;
+    }, [fetchDownloads]);
 
     const downloadFile = async (name: string) => {
         const currentKey = localStorage.getItem('browser-api-key') || apiKey;
@@ -272,7 +296,8 @@ function App() {
                     setTabs(prev => {
                         const exists = prev.find(t => t.id === msg.id);
                         if (exists) return prev;
-                        const newTabs = [...prev, { id: msg.id, title: t.new_tab, url: 'about:blank', isLoading: false }];
+                        const currentT = translations[languageRef.current] || translations['es-ES'];
+                        const newTabs = [...prev, { id: msg.id, title: currentT.new_tab, url: 'about:blank', isLoading: false }];
                         if (!activeTabIdRef.current) setActiveTabId(msg.id);
                         return newTabs;
                     });
@@ -297,7 +322,7 @@ function App() {
                     setContextMenu({ visible: true, x: msg.x, y: msg.y, info: msg.info });
                     break;
                 case 'download_finished':
-                    fetchDownloads();
+                    fetchDownloadsRef.current();
                     break;
             }
         };
