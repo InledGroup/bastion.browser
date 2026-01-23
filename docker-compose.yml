@@ -10,19 +10,18 @@ x-casaos:
     es_es: Aísla tu navegación con una Instancia de Navegador Remoto (RBI) segura.
   main: bastion-browser
   port: 112
+  scheme: https
 
 services:
   bastion-browser:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: bastion-browser
     image: inledgroup/bastion-browser:latest
     ports:
-      - "${PORT:-112}:${PORT:-112}"
+      - "112:112"
     environment:
-      - API_KEY=${API_KEY}
-      - PORT=${PORT:-112}
+      - API_KEY=bastion-browser-secret-key
+      - PORT=112
     shm_size: '1gb'
     restart: unless-stopped
     volumes:
@@ -31,4 +30,6 @@ services:
 
 volumes:
   bastion_downloads:
+    external: false
   bastion_uploads:
+    external: false
