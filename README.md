@@ -68,7 +68,7 @@ Strict limitation of:
 ### 🏠 CasaOS Deployment (One-liner)
 If you are using CasaOS, you can install Bastion Browser and have it show up in your dashboard with a single command:
 ```bash
-git clone https://github.com/InledGroup/bastion.browser.git && cd bastion.browser && sudo docker compose up -d --build
+git clone https://github.com/InledGroup/bastion.browser.git && cd bastion.browser &&  docker compose up -d --build
 ```
 
 ### 🐳 Docker Compose (Standard)
@@ -81,7 +81,7 @@ git clone https://github.com/InledGroup/bastion.browser.git && cd bastion.browse
    Edit the `.env` file to set your `API_KEY` and `PORT`.
 3. **Start the application:**
    ```bash
-   sudo docker compose up -d --build
+    docker compose up -d --build
    ```
 
 The service will be available at `https://localhost:112` (or your configured port).
