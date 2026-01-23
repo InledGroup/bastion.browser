@@ -1,0 +1,401 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+    --bg-black: #000000;
+    --bg-card: #09090b;
+    --border-white: rgba(255, 255, 255, 0.08);
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --accent-white: #ffffff;
+    --font-main: 'Plus Jakarta Sans', sans-serif;
+}
+
+.welcome-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg-black);
+    color: var(--text-primary);
+    font-family: var(--font-main);
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    padding-bottom: 100px;
+}
+
+/* Noise Texture Overlay */
+.welcome-container::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    opacity: 0.05;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3%3Ffilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Abstract Dot Pattern */
+.welcome-container .dot-overlay {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.03) 1px, transparent 0);
+    background-size: 24px 24px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Top Glow */
+.welcome-container::after {
+    content: '';
+    position: absolute;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 400px;
+    background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
+    pointer-events: none;
+}
+
+.welcome-content {
+    max-width: 1100px;
+    width: 100%;
+    padding: 80px 40px;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.hero-section {
+    text-align: center;
+    margin-bottom: 80px;
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.welcome-hero-logo {
+    width: 120px;
+    height: 120px;
+    margin-bottom: 24px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.1));
+}
+
+.welcome-logo {
+    font-size: 8rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: -0.06em;
+    line-height: 0.9;
+    text-transform: uppercase;
+    background: linear-gradient(to bottom, #fff 30%, rgba(255, 255, 255, 0.2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.welcome-subtitle {
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    margin-top: 24px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.hero-search-container {
+    margin-top: 48px;
+    width: 100%;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.hero-search-bar {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-white);
+    border-radius: 20px;
+    padding: 8px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    backdrop-filter: blur(10px);
+}
+
+.hero-search-bar:focus-within {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06);
+    transform: scale(1.02);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.engine-selector {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-white);
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.engine-logo-img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.engine-selector:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: rotate(10deg);
+}
+
+.hero-search-bar input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-family: var(--font-main);
+    font-size: 1.1rem;
+    padding: 0 16px;
+    outline: none;
+}
+
+.hero-search-bar input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.search-submit {
+    background: #fff;
+    color: #000;
+    border: none;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.search-submit:hover {
+    transform: translateX(4px);
+    background: #e0e0e0;
+}
+
+.engine-labels {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.engine-labels span {
+    cursor: pointer;
+    transition: color 0.2s ease;
+    position: relative;
+}
+
+.engine-labels span:hover {
+    color: #fff;
+}
+
+.engine-labels span.active {
+    color: #fff;
+    font-weight: 600;
+}
+
+.engine-labels span.active::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: #fff;
+}
+
+.bento-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-auto-rows: minmax(320px, auto);
+    gap: 16px;
+    width: 100%;
+    margin-top: 20px;
+    animation: fadeInUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards;
+}
+
+.bento-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-white);
+    border-radius: 28px;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.bento-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: #121214;
+    transform: translateY(-4px);
+}
+
+.card-large {
+    grid-column: span 7;
+}
+
+.card-medium {
+    grid-column: span 5;
+}
+
+.card-wide {
+    grid-column: span 6;
+}
+
+.card-accent {
+    grid-column: span 4;
+}
+
+.card-slim {
+    grid-column: span 3;
+}
+
+.card-icon {
+    width: 52px;
+    height: 52px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-white);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    transition: transform 0.3s ease;
+    margin-bottom: 32px;
+    flex-shrink: 0;
+}
+
+.bento-card:hover .card-icon {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.bento-card h4 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.3;
+}
+
+.bento-card p {
+    font-size: 1.05rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.6;
+    max-width: 100%;
+}
+
+.card-visual-glow {
+    position: absolute;
+    top: -20%;
+    right: -20%;
+    width: 60%;
+    height: 60%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.status-bar {
+    margin-top: 80px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 10px 20px;
+    border-radius: 100px;
+    border: 1px solid var(--border-white);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 500;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #fff;
+    animation: pulse-glow 2s infinite;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse-glow {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.3;
+        transform: scale(0.8);
+    }
+}
+
+@media (max-width: 1024px) {
+    .bento-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+    }
+
+    .card-large,
+    .card-medium,
+    .card-wide,
+    .card-accent,
+    .card-slim {
+        grid-column: span 1;
+    }
+
+    .welcome-logo {
+        font-size: 4rem;
+    }
+}

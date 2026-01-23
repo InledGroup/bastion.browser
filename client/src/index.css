@@ -1,0 +1,21 @@
+/* Reset global styles that interfere with App.css */
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  display: block; /* Remove vite's default flex centering */
+  background-color: #f2f4f8;
+}
