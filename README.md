@@ -63,23 +63,39 @@ Strict limitation of:
 
 ---
 
-## 📦 Quick Installation
+## 📦 Installation & Deployment
 
-### Prerequisites
-- Docker & Docker Compose
-- OpenSSL (for automatic certificate generation)
-
-### Deployment with Docker
+### 🏠 CasaOS Deployment (One-liner)
+If you are using CasaOS, you can install Bastion Browser and have it show up in your dashboard with a single command:
 ```bash
-# Clone the repository
-git clone https://github.com/your-user/dockserch.git
-cd dockserch
-
-# Build and run
-./build_and_run.sh
+git clone https://github.com/InledGroup/bastion.browser.git && cd bastion.browser && docker-compose up -d --build
 ```
 
-The service will be available at `https://localhost:112`.
+### 🐳 Docker Compose (Standard)
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/InledGroup/bastion.browser.git
+   cd bastion.browser
+   ```
+2. **Configure environment (Optional):**
+   Edit the `.env` file to set your `API_KEY` and `PORT`.
+3. **Start the application:**
+   ```bash
+   docker-compose up -d --build
+   ```
+
+The service will be available at `https://localhost:112` (or your configured port).
+
+### 🛠️ Manual Build (Local)
+```bash
+# Clone the repository
+git clone https://github.com/InledGroup/bastion.browser.git
+cd bastion.browser
+
+# Build and run using the helper script
+chmod +x build_and_run.sh
+./build_and_run.sh
+```
 
 ---
 

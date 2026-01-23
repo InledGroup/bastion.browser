@@ -57,6 +57,9 @@ USER pptruser
 # Expose Port
 EXPOSE 112
 
+# Explicitly set workdir for the start command
+WORKDIR /app/server
+
 # Start Server
 CMD ["npm", "start"]
 

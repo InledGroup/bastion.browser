@@ -1,0 +1,36 @@
+version: '3.8'
+
+x-casaos:
+  author: InledGroup
+  category: Browser
+  icon: https://raw.githubusercontent.com/InledGroup/bastion.browser/main/client/public/bastion.png
+  title:
+    en_us: Bastion Browser
+    es_es: Bastion Browser
+  description:
+    en_us: Isolate your browsing with a secure Remote Browser Instance (RBI).
+    es_es: Aísla tu navegación con una Instancia de Navegador Remoto (RBI) segura.
+  main: bastion-browser
+  port: 112
+
+services:
+  bastion-browser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bastion-browser
+    image: inledgroup/bastion-browser:latest
+    ports:
+      - "${PORT:-112}:${PORT:-112}"
+    environment:
+      - API_KEY=${API_KEY}
+      - PORT=${PORT:-112}
+    shm_size: '1gb'
+    restart: unless-stopped
+    volumes:
+      - bastion_downloads:/home/pptruser/Downloads
+      - bastion_uploads:/home/pptruser/Uploads
+
+volumes:
+  bastion_downloads:
+  bastion_uploads:
