@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-casaos:
   author: InledGroup
   category: Browser

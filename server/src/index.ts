@@ -19,7 +19,7 @@ import chokidar from 'chokidar';
 puppeteer.use(StealthPlugin());
 
 const app = express();
-const PORT = process.env.PORT || 112;
+const PORT = Number(process.env.PORT) || 112;
 const BASE_DOWNLOADS_DIR = path.join(process.env.HOME || '/home/pptruser', 'Downloads');
 const BASE_UPLOADS_DIR = path.join(process.env.HOME || '/home/pptruser', 'Uploads');
 const CERT_DIR = path.join(__dirname, '../certs');
