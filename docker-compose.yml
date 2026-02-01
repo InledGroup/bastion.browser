@@ -19,9 +19,11 @@ services:
     image: inledgroup/bastion-browser:latest
     ports:
       - "112:112"
+      - "3001:3001"
     environment:
       - API_KEY=bastion-browser-secret-key
       - PORT=112
+      - MCP_PORT=3001
     shm_size: '1gb'
     restart: unless-stopped
     volumes:

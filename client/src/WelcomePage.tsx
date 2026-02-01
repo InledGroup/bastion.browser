@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Shield, Zap, Lock, Globe, Server, UserCheck, ArrowRight } from 'lucide-react';
+import { Shield, Zap, Lock, Globe, Server, UserCheck, ArrowRight, Cpu } from 'lucide-react';
 import './WelcomePage.css';
 
 interface WelcomePageProps {
   onNavigate?: (url: string) => void;
+  onShowMCP?: () => void;
   language?: string;
 }
 
-const WelcomePage: React.FC<WelcomePageProps> = ({ onNavigate, language = 'es-ES' }) => {
+const WelcomePage: React.FC<WelcomePageProps> = ({ onNavigate, onShowMCP, language = 'es-ES' }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeEngine, setActiveEngine] = useState('startpage');
 
@@ -33,6 +34,7 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onNavigate, language = 'es-ES
     'es-ES': {
       subtitle: "Navegación ultra-segura mediante aislamiento remoto y endurecimiento de red.",
       placeholder: "Busca en la red de forma segura...",
+      mcp_link: "Configurar Servidor MCP para Agentes de IA",
       cards: [
         {
           id: 'isolation',
@@ -82,6 +84,7 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onNavigate, language = 'es-ES
     'en-US': {
       subtitle: "Ultra-secure browsing via remote isolation and network hardening.",
       placeholder: "Search the web securely...",
+      mcp_link: "Configure MCP Server for AI Agents",
       cards: [
         {
           id: 'isolation',
@@ -157,6 +160,29 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onNavigate, language = 'es-ES
           <img src="/bastion.png" className="welcome-hero-logo" alt="Bastion Logo" />
           <h1 className="welcome-logo">Bastion</h1>
           <p className="welcome-subtitle">{t.subtitle}</p>
+          
+          <div style={{ marginTop: '10px', display: 'flex', gap: '20px', justifyContent: 'center' }}>
+            <button 
+              onClick={onShowMCP} 
+              style={{ 
+                background: 'rgba(16, 185, 129, 0.1)', 
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                color: '#10b981',
+                padding: '8px 16px',
+                borderRadius: '20px',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)'}
+              onMouseOut={(e) => e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'}
+            >
+              <Cpu size={16} /> {t.mcp_link}
+            </button>
+          </div>
 
           <div className="hero-search-container">
             <form className="hero-search-bar" onSubmit={handleSearch}>

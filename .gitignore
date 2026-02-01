@@ -3,3 +3,11 @@ dist/
 firebase-debug.log
 .DS_Store
 .gemini-clipboard
+.env
+*.pem
+*.bin
+Downloads/
+Uploads/
+server/certs/
+server/dist/
+client/dist/

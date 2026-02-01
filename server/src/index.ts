@@ -23,8 +23,105 @@ const PORT = Number(process.env.PORT) || 112;
 const BASE_DOWNLOADS_DIR = path.join(process.env.HOME || '/home/pptruser', 'Downloads');
 const BASE_UPLOADS_DIR = path.join(process.env.HOME || '/home/pptruser', 'Uploads');
 const CERT_DIR = path.join(__dirname, '../certs');
-const API_KEY = process.env.API_KEY || 'bastion-browser-secret-key'; // In production, use a strong env var
+const API_KEY = process.env.API_KEY || 'bastion-browser-secret-key';
+const VAULT_PATH = path.join(__dirname, '../vault.bin');
 const MAX_TOTAL_SESSIONS = 5;
+
+// Secure Vault Helpers
+function encrypt(text: string, masterKey: string): string {
+    const iv = crypto.randomBytes(16);
+    const key = crypto.scryptSync(masterKey, 'bastion-salt', 32);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag().toString('hex');
+    return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+function decrypt(encryptedData: string, masterKey: string): string | null {
+    try {
+        const [ivHex, authTagHex, encryptedText] = encryptedData.split(':');
+        const iv = Buffer.from(ivHex, 'hex');
+        const authTag = Buffer.from(authTagHex, 'hex');
+        const key = crypto.scryptSync(masterKey, 'bastion-salt', 32);
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted;
+    } catch (e) {
+        return null;
+    }
+}
+
+function saveToVault(data: object, masterKey: string) {
+    const encrypted = encrypt(JSON.stringify(data), masterKey);
+    fs.writeFileSync(VAULT_PATH, encrypted);
+}
+
+function loadFromVault(masterKey: string): any {
+    if (!fs.existsSync(VAULT_PATH)) return {};
+    const encrypted = fs.readFileSync(VAULT_PATH, 'utf8');
+    const decrypted = decrypt(encrypted, masterKey);
+    return decrypted ? JSON.parse(decrypted) : {};
+}
+
+// VirusTotal API Helpers using session-specific key
+async function getVTUrlReport(targetUrl: string, vtKey: string): Promise<{ safe: boolean; reportUrl: string }> {
+    if (!vtKey || vtKey === 'your_virustotal_api_key_here') return { safe: true, reportUrl: '' };
+    
+    try {
+        const urlId = Buffer.from(targetUrl).toString('base64').replace(/=/g, '');
+        const response = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
+            headers: { 'x-apikey': vtKey }
+        });
+
+        if (response.status === 404) {
+            // URL not scanned before, submit it
+            const submitResponse = await fetch('https://www.virustotal.com/api/v3/urls', {
+                method: 'POST',
+                headers: { 'x-apikey': vtKey, 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `url=${encodeURIComponent(targetUrl)}`
+            });
+            const submitData: any = await submitResponse.json();
+            return { safe: true, reportUrl: `https://www.virustotal.com/gui/url/${submitData.data?.id.split('-')[1]}` };
+        }
+
+        const data: any = await response.json();
+        const stats = data.data?.attributes?.last_analysis_stats;
+        const isSafe = stats ? (stats.malicious === 0 && stats.suspicious === 0) : true;
+        const reportUrl = `https://www.virustotal.com/gui/url/${data.data?.id}`;
+        
+        return { safe: isSafe, reportUrl };
+    } catch (e) {
+        console.error('VT URL Analysis Error:', e);
+        return { safe: true, reportUrl: '' };
+    }
+}
+
+async function uploadFileToVT(filePath: string, vtKey: string): Promise<string> {
+    if (!vtKey || vtKey === 'your_virustotal_api_key_here') return '';
+    
+    try {
+        const formData = new FormData();
+        const fileContent = fs.readFileSync(filePath);
+        const blob = new Blob([fileContent]);
+        formData.append('file', blob, path.basename(filePath));
+
+        const response = await fetch('https://www.virustotal.com/api/v3/files', {
+            method: 'POST',
+            headers: { 'x-apikey': vtKey },
+            body: formData
+        });
+
+        const data: any = await response.json();
+        const fileHash = crypto.createHash('sha256').update(fileContent).digest('hex');
+        return `https://www.virustotal.com/gui/file/${fileHash}`;
+    } catch (e) {
+        console.error('VT File Analysis Error:', e);
+        return '';
+    }
+}
 let currentSessions = 0;
 
 if (!fs.existsSync(BASE_DOWNLOADS_DIR)) {
@@ -230,9 +327,12 @@ app.delete('/api/downloads', authMiddleware, (req, res) => {
 });
 
 // File Upload Endpoint
-app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
-    if (!req.file) return res.status(400).send('No file uploaded');
-    res.json({ filename: req.file.filename });
+app.post('/api/upload', authMiddleware, upload.array('files'), (req, res) => {
+    if (!req.files || (req.files as Express.Multer.File[]).length === 0) {
+        return res.status(400).send('No files uploaded');
+    }
+    const files = req.files as Express.Multer.File[];
+    res.json({ filenames: files.map(f => f.filename) });
 });
 
 app.get('*', (req, res, next) => {
@@ -255,6 +355,7 @@ async function initBrowser() {
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
+                '--remote-debugging-port=9222',
                 '--window-size=1280,720',
                 '--hide-scrollbars',
                 '--disable-blink-features=AutomationControlled',
@@ -315,9 +416,18 @@ wss.on('connection', async (ws: WebSocket, req) => {
         ignored: /(^|[\/\\])\..|.*\.crdownload$|.*\.tmp$/
     });
 
-    watcher.on('add', (filePath) => {
+    watcher.on('add', async (filePath) => {
         const fileName = path.basename(filePath);
         console.log(`File detected in downloads: ${fileName}`);
+        
+        if (sessionConfig.vtAnalyzeDownloads) {
+            console.log(`Analyzing file with VirusTotal: ${fileName}`);
+            const reportUrl = await uploadFileToVT(filePath, vtKey);
+            if (reportUrl) {
+                ws.send(JSON.stringify({ type: 'vt_report', reportUrl, item: fileName }));
+            }
+        }
+
         // Give the OS a moment to release any locks
         setTimeout(() => {
             if (fs.existsSync(filePath)) {
@@ -328,29 +438,17 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
     if (!browser) await initBrowser();
     
-    // Create an isolated context for this session
-    let context: any;
-    try {
-        const b = browser as any;
-        if (typeof b.createBrowserContext === 'function') {
-            context = await b.createBrowserContext();
-        } else if (typeof b.createIncognitoBrowserContext === 'function') {
-            context = await b.createIncognitoBrowserContext();
-        } else {
-            context = browser!.defaultBrowserContext();
-        }
-    } catch (e) {
-        console.error('Failed to create browser context:', e);
-        ws.close();
-        return;
-    }
+    // Use the default context to share everything with MCP
+    const context = browser!.defaultBrowserContext();
 
     const sessionPages = new Map<string, Page>();
     const pendingFileChoosers = new Map<string, FileChooser>();
     const MAX_TABS = 10;
     let activePageId: string | null = null;
     let sessionConfig = {
-        language: 'es-ES'
+        language: 'es-ES',
+        vtAnalyzeDownloads: false,
+        vtAnalyzeUrls: false
     };
 
     const setupPage = async (page: Page, id: string) => {
@@ -368,20 +466,36 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
         // Handle file selection requests
         page.on('filechooser', async (fileChooser) => {
-            console.log('File selection requested by page');
+            console.log(`[Session ${sessionId}] File selection requested in page ${id}`);
             pendingFileChoosers.set(id, fileChooser as any);
             ws.send(JSON.stringify({ type: 'file_requested', id, multiple: (fileChooser as any).isMultiple() }));
         });
 
-        // Set download behavior for this specific session
+        // Debug remote console
+        page.on('console', msg => {
+            if (msg.text() === '__BASTION_AI_ACTIVE__') {
+                ws.send(JSON.stringify({ type: 'ai_active', id }));
+                return;
+            }
+            if (msg.type() === 'error') console.log(`[Remote Browser Error - ${id}]: ${msg.text()}`);
+        });
+
+        // Set behaviors using CDP (Chrome DevTools Protocol) for maximum compatibility
         try {
             const client = await page.target().createCDPSession();
+            
+            // Enable file chooser interception at the protocol level
+            await client.send('Page.setInterceptFileChooserDialog', { enabled: true });
+            
+            // Set download behavior
             await client.send('Page.setDownloadBehavior', {
                 behavior: 'allow',
                 downloadPath: sessionDir,
             });
+            
+            console.log(`[Session ${sessionId}] Browser behaviors enabled via CDP for page ${id}`);
         } catch (e) {
-            console.error('Failed to set download behavior:', e);
+            console.error('Failed to set browser behaviors via CDP:', e);
         }
 
         await page.setViewport({ width: 1280, height: 720 }).catch(() => {});
@@ -402,6 +516,17 @@ wss.on('connection', async (ws: WebSocket, req) => {
         });
     };
 
+    // Import existing pages into the UI session
+    const existingPages = await context.pages();
+    for (const p of existingPages) {
+        const id = (p as any).target()._targetId;
+        if (!sessionPages.has(id)) {
+            await setupPage(p, id);
+            sessionPages.set(id, p);
+            ws.send(JSON.stringify({ type: 'tab_created', id }));
+        }
+    }
+
     // Listen for new targets (e.g. window.open)
     context.on('targetcreated', async (target: any) => {
         if (target.type() === 'page') {
@@ -418,14 +543,23 @@ wss.on('connection', async (ws: WebSocket, req) => {
         }
     });
 
-    // Send the assigned sessionId back to client
-    ws.send(JSON.stringify({ type: 'session_ready', sessionId }));
+    // Load session-specific keys from encrypted vault
+    let vault = loadFromVault(API_KEY);
+    let vtKey = vault.vtKey || process.env.VIRUSTOTAL_API_KEY;
 
     ws.on('message', async (message: string) => {
         try {
             const data = JSON.parse(message);
 
             switch (data.type) {
+                case 'save_vt_key': {
+                    const currentVault = loadFromVault(API_KEY);
+                    currentVault.vtKey = data.key;
+                    saveToVault(currentVault, API_KEY);
+                    vtKey = data.key;
+                    console.log(`[Session ${sessionId}] VirusTotal API Key saved to encrypted vault.`);
+                    break;
+                }
                 case 'update_config': {
                     sessionConfig = { ...sessionConfig, ...data.config };
                     console.log(`Session ${sessionId} updated config:`, sessionConfig);
@@ -470,16 +604,25 @@ wss.on('connection', async (ws: WebSocket, req) => {
                 }
 
                 case 'file_provided': {
-                    const { id, filename } = data;
+                    const { id, filenames } = data;
                     const fileChooser = pendingFileChoosers.get(id);
-                    if (fileChooser && filename) {
-                        const filePath = path.join(sessionUploadDir, path.basename(filename));
-                        if (fs.existsSync(filePath)) {
-                            console.log(`Providing file to browser: ${filePath}`);
-                            await fileChooser.accept([filePath]);
+                    if (fileChooser && filenames && Array.isArray(filenames)) {
+                        const filePaths = filenames.map(filename => 
+                            path.join(sessionUploadDir, path.basename(filename))
+                        ).filter(p => fs.existsSync(p));
+
+                        if (filePaths.length > 0) {
+                            console.log(`Providing ${filePaths.length} files to browser:`, filePaths);
+                            await fileChooser.accept(filePaths);
                             pendingFileChoosers.delete(id);
-                            // Cleanup uploaded file after use
-                            setTimeout(() => fs.unlinkSync(filePath), 1000);
+                            // Cleanup uploaded files after use
+                            setTimeout(() => {
+                                for (const p of filePaths) {
+                                    try {
+                                        if (fs.existsSync(p)) fs.unlinkSync(p);
+                                    } catch (e) {}
+                                }
+                            }, 2000);
                         }
                     }
                     break;
@@ -537,6 +680,34 @@ wss.on('connection', async (ws: WebSocket, req) => {
                             return;
                         }
 
+                        if (sessionConfig.vtAnalyzeUrls && !targetUrl.startsWith('about:')) {
+                            const uri = new URL(targetUrl);
+                            const hostname = uri.hostname.toLowerCase();
+                            
+                            // Whitelist/Exclusion List: Search engines and trusted domains
+                            const isWhitelisted = 
+                                hostname.includes('google.com') || 
+                                hostname.includes('startpage.com') || 
+                                hostname.includes('brave.com') ||
+                                hostname === 'localhost';
+
+                            if (!isWhitelisted) {
+                                ws.send(JSON.stringify({ type: 'vt_scanning', url: targetUrl }));
+                                const { safe, reportUrl } = await getVTUrlReport(targetUrl, vtKey);
+                                
+                                if (!safe) {
+                                    ws.send(JSON.stringify({ 
+                                        type: 'vt_warning', 
+                                        url: targetUrl, 
+                                        reportUrl 
+                                    }));
+                                    return; // Stop navigation if not safe
+                                } else if (reportUrl) {
+                                    ws.send(JSON.stringify({ type: 'vt_info', url: targetUrl, reportUrl }));
+                                }
+                            }
+                        }
+
                         ws.send(JSON.stringify({ type: 'loading_start', id: activePageId }));
                         page.goto(targetUrl, { waitUntil: 'domcontentloaded' }).catch(() => {
                             ws.send(JSON.stringify({ type: 'loading_stop', id: activePageId }));
@@ -585,6 +756,25 @@ wss.on('connection', async (ws: WebSocket, req) => {
                     if (pageToClose) {
                         await pageToClose.close().catch(() => {});
                         sessionPages.delete(idToClose);
+                    }
+                    break;
+                }
+
+                case 'manual_file_request': {
+                    if (!activePageId) return;
+                    const page = sessionPages.get(activePageId);
+                    if (page) {
+                        console.log(`[Session ${sessionId}] Manual file request triggered for page ${activePageId}`);
+                        await page.evaluate(() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.multiple = true;
+                            input.style.display = 'none';
+                            input.id = 'bastion-manual-upload';
+                            document.body.appendChild(input);
+                            input.click();
+                            document.body.removeChild(input);
+                        }).catch(e => console.error("Manual file trigger failed:", e));
                     }
                     break;
                 }

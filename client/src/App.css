@@ -375,6 +375,11 @@ html, body, #root {
   width: 100%;
 }
 
+.bookmark-btn {
+    flex-shrink: 0;
+    margin-left: 4px;
+}
+
 .viewport-container {
   flex: 1;
   background-color: #ffffff;
@@ -401,12 +406,17 @@ html, body, #root {
 .login-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.8);
-    backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 100;
+}
+
+.login-overlay.light {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(2px);
 }
 
 .login-card {
@@ -418,6 +428,28 @@ html, body, #root {
     max-width: 400px;
     width: 90%;
     box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    color: white;
+}
+
+.login-card.light-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.login-card.light-card h2, 
+.login-card.light-card h3 {
+    color: var(--text-primary);
+}
+
+.login-card.light-card p {
+    color: var(--text-secondary);
+}
+
+.login-card.light-card .api-key-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
 }
 
 .login-icon {
@@ -684,4 +716,95 @@ html, body, #root {
     height: 1px;
     background-color: var(--border-color);
     margin: 4px 0;
+}
+
+/* Bookmarks Bar */
+.bookmarks-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 12px;
+    background-color: var(--bg-chrome);
+    border-bottom: 1px solid var(--border-color);
+    height: 28px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.bookmarks-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.bookmark-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-primary);
+    transition: background-color 0.2s;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+.bookmark-item:hover {
+    background-color: var(--bg-hover);
+}
+
+.bookmark-favicon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.bookmark-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bookmark-btn.active {
+    color: #f59e0b; /* Amber 500 */
+}
+
+/* AI Activity Effects */
+.ai-status-dot {
+    width: 10px;
+    height: 10px;
+    background-color: #10b981;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #10b981;
+    animation: pulse-ai 1.5s infinite;
+}
+
+@keyframes pulse-ai {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 12px #10b981; }
+    100% { transform: scale(0.8); opacity: 0.5; }
+}
+
+.viewport-container.ai-active-frame::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border: 3px solid transparent;
+    background: linear-gradient(90deg, #10b981, #059669, #10b981) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    animation: comet-glow 2s linear infinite;
+    z-index: 1000;
+}
+
+@keyframes comet-glow {
+    0% { filter: hue-rotate(0deg) brightness(1); }
+    50% { filter: hue-rotate(20deg) brightness(1.5); }
+    100% { filter: hue-rotate(0deg) brightness(1); }
+}
+
+.ai-tab {
+    border-bottom: 2px solid #10b981 !important;
 }

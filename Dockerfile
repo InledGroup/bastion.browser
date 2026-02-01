@@ -1,21 +1,37 @@
-FROM node:20-slim
+FROM node:20
 
-# Install dependencies for Chromium (Puppeteer)
+# Install dependencies for Playwright and Puppeteer, plus Chromium browser
 RUN apt-get update && apt-get install -y \
     chromium \
-    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
+    libgbm-dev \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libwayland-client0 \
+    libwayland-cursor0 \
+    libwayland-egl1 \
+    libxshmfence1 \
     openssl \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Set env to use installed chromium
+# Set env for Puppeteer to use the system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Add a non-privileged user
-RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
-    && mkdir -p /home/pptruser/Downloads /home/pptruser/Uploads \
-    && chown -R pptruser:pptruser /home/pptruser
+# Playwright browsers path
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers
 
 WORKDIR /app
 
@@ -24,9 +40,6 @@ COPY package.json ./
 COPY client/package.json ./client/
 COPY server/package.json ./server/
 
-# Install root dependencies
-# RUN npm install
-
 # Install Client Deps
 WORKDIR /app/client
 RUN npm install
@@ -34,6 +47,8 @@ RUN npm install
 # Install Server Deps
 WORKDIR /app/server
 RUN npm install
+# Install Playwright's own Chromium
+RUN npx playwright install chromium
 
 # Copy Source Code
 WORKDIR /app
@@ -48,18 +63,9 @@ RUN npm run build
 WORKDIR /app/server
 RUN npm run build
 
-# Ensure pptruser owns the app directory
-RUN chown -R pptruser:pptruser /app
-
-# Run as non-privileged user
-USER pptruser
-
-# Expose Port
+# Expose Ports
 EXPOSE 112
-
-# Explicitly set workdir for the start command
-WORKDIR /app/server
+EXPOSE 3001
 
 # Start Server
-CMD ["npm", "start"]
-
+CMD ["npm", "run", "start:combined"]

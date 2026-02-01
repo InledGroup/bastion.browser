@@ -20,9 +20,14 @@ import {
     Eye,
     EyeOff,
     Upload,
-    FileUp
+    FileUp,
+    Star,
+    Edit3,
+    Shield,
+    Cpu
 } from 'lucide-react';
 import WelcomePage from './WelcomePage';
+import MCPDocs from './MCPDocs';
 import './App.css';
 
 const translations: any = {
@@ -49,11 +54,26 @@ const translations: any = {
         reload: 'Recargar',
         open_new_tab: 'Abrir en nueva pestaña',
         download_item: 'Descargar',
+        upload_file: 'Subir archivo',
         upload_title: 'Subida Segura de Archivos',
         upload_desc: 'Una página solicita un archivo. Selecciona un documento para enviarlo al Bastión de forma aislada.',
         upload_btn: 'Seleccionar del Equipo',
         cancel: 'Cancelar',
-        drop_files: 'Suelte el archivo aquí'
+        drop_files: 'Suelte el archivo aquí',
+        bookmarks: 'Marcadores',
+        save_bookmark: 'Guardar marcador',
+        edit_bookmark: 'Editar marcador',
+        delete_bookmark: 'Eliminar marcador',
+        bookmark_title: 'Título',
+        bookmark_url: 'URL',
+        save: 'Guardar',
+        vt_analyze_downloads: 'Analizar descargas con VirusTotal',
+        vt_analyze_urls: 'Analizar URLs antes de navegar',
+        vt_report: 'Ver reporte',
+        vt_scanning: 'Analizando con VirusTotal...',
+        vt_danger: '¡Amenaza Detectada!',
+        vt_safe: 'Sitio Seguro',
+        mcp_docs: 'Documentación MCP'
     },
     'en-US': {
         restricted: 'Restricted Access',
@@ -78,11 +98,26 @@ const translations: any = {
         reload: 'Reload',
         open_new_tab: 'Open in new tab',
         download_item: 'Download',
+        upload_file: 'Upload file',
         upload_title: 'Secure File Upload',
         upload_desc: 'A webpage is requesting a file. Select a document to send it to the Bastion in an isolated way.',
         upload_btn: 'Select from Computer',
         cancel: 'Cancel',
-        drop_files: 'Drop file here'
+        drop_files: 'Drop file here',
+        bookmarks: 'Bookmarks',
+        save_bookmark: 'Save bookmark',
+        edit_bookmark: 'Edit bookmark',
+        delete_bookmark: 'Delete bookmark',
+        bookmark_title: 'Title',
+        bookmark_url: 'URL',
+        save: 'Save',
+        vt_analyze_downloads: 'Analyze downloads with VirusTotal',
+        vt_analyze_urls: 'Analyze URLs before navigating',
+        vt_report: 'View report',
+        vt_scanning: 'Scanning with VirusTotal...',
+        vt_danger: 'Threat Detected!',
+        vt_safe: 'Safe Site',
+        mcp_docs: 'MCP Documentation'
     }
 };
 
@@ -91,6 +126,12 @@ interface Tab {
     title: string;
     url: string;
     isLoading: boolean;
+}
+
+interface Bookmark {
+    id: string;
+    title: string;
+    url: string;
 }
 
 interface DownloadFile {
@@ -111,9 +152,20 @@ function App() {
 
     const [downloads, setDownloads] = useState<DownloadFile[]>([]);
     const [showDownloads, setShowDownloads] = useState(false);
+    const [showMCPDocs, setShowMCPDocs] = useState(false);
 
     const [showSettings, setShowSettings] = useState(false);
+    const [isAIActive, setIsAIActive] = useState(false);
+    const aiTimeoutRef = useRef<any>(null);
+    
+    const handleAIActivity = useCallback(() => {
+        setIsAIActive(true);
+        if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
+        aiTimeoutRef.current = setTimeout(() => setIsAIActive(false), 3000);
+    }, []);
     const [language, setLanguage] = useState(localStorage.getItem('browser-lang') || 'es-ES');
+    const [vtAnalyzeDownloads, setVtAnalyzeDownloads] = useState(localStorage.getItem('vt-analyze-downloads') === 'true');
+    const [vtAnalyzeUrls, setVtAnalyzeUrls] = useState(localStorage.getItem('vt-analyze-urls') === 'true');
     const languageRef = useRef(language);
     
     useEffect(() => {
@@ -128,6 +180,33 @@ function App() {
 
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [fileRequest, setFileRequest] = useState<{ id: string; multiple: boolean } | null>(null);
+
+    const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
+        const saved = localStorage.getItem('browser-bookmarks');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+    const [bookmarkContextMenu, setBookmarkContextMenu] = useState<{ x: number; y: number; bookmark: Bookmark } | null>(null);
+
+    useEffect(() => {
+        localStorage.setItem('browser-bookmarks', JSON.stringify(bookmarks));
+    }, [bookmarks]);
+
+    const toggleBookmark = () => {
+        const activeTab = tabs.find(t => t.id === activeTabId);
+        if (!activeTab || activeTab.url === 'about:blank') return;
+
+        const existingIndex = bookmarks.findIndex(b => b.url === activeTab.url);
+        if (existingIndex >= 0) {
+            setBookmarks(prev => prev.filter((_, i) => i !== existingIndex));
+        } else {
+            setBookmarks(prev => [...prev, {
+                id: Math.random().toString(36).substr(2, 9),
+                title: activeTab.title,
+                url: activeTab.url
+            }]);
+        }
+    };
 
     const imgRef = useRef<HTMLImageElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -195,7 +274,10 @@ function App() {
         
         const currentKey = localStorage.getItem('browser-api-key') || apiKey;
         const formData = new FormData();
-        formData.append('file', files[0]);
+        
+        for (let i = 0; i < files.length; i++) {
+            formData.append('files', files[i]);
+        }
 
         try {
             const response = await fetch(`/api/upload?api_key=${encodeURIComponent(currentKey)}&sessionId=${sessionId}`, {
@@ -204,8 +286,8 @@ function App() {
             });
 
             if (response.ok) {
-                const { filename } = await response.json();
-                sendMsg({ type: 'file_provided', id: fileRequest.id, filename });
+                const { filenames } = await response.json();
+                sendMsg({ type: 'file_provided', id: fileRequest.id, filenames });
                 setFileRequest(null);
             }
         } catch (err) {
@@ -267,7 +349,14 @@ function App() {
             setIsConnecting(false);
             setApiKey(key);
             localStorage.setItem('browser-api-key', key);
-            ws.send(JSON.stringify({ type: 'update_config', config: { language } }));
+            ws.send(JSON.stringify({ 
+                type: 'update_config', 
+                config: { 
+                    language, 
+                    vtAnalyzeDownloads: localStorage.getItem('vt-analyze-downloads') === 'true',
+                    vtAnalyzeUrls: localStorage.getItem('vt-analyze-urls') === 'true'
+                } 
+            }));
             ws.send(JSON.stringify({ type: 'create_tab' }));
         };
 
@@ -323,6 +412,23 @@ function App() {
                     break;
                 case 'download_finished':
                     fetchDownloadsRef.current();
+                    break;
+                case 'vt_scanning':
+                    // We could show a scanning indicator
+                    break;
+                case 'vt_report':
+                case 'vt_info':
+                    if (msg.reportUrl) {
+                        window.open(msg.reportUrl, '_blank');
+                    }
+                    break;
+                case 'vt_warning':
+                    if (window.confirm(`${t.vt_danger}\nURL: ${msg.url}\n\n${t.vt_report}?`)) {
+                        window.open(msg.reportUrl, '_blank');
+                    }
+                    break;
+                case 'ai_active':
+                    handleAIActivity();
                     break;
             }
         };
@@ -422,7 +528,10 @@ function App() {
         };
         const onDown = (e: KeyboardEvent) => handleKey(e, 'keydown');
         const onUp = (e: KeyboardEvent) => handleKey(e, 'keyup');
-        const onClickOutside = () => setContextMenu(null);
+        const onClickOutside = () => {
+            setContextMenu(null);
+            setBookmarkContextMenu(null);
+        };
         window.addEventListener('keydown', onDown);
         window.addEventListener('keyup', onUp);
         window.addEventListener('click', onClickOutside);
@@ -448,16 +557,27 @@ function App() {
         setContextMenu(null);
     };
 
+    const getFaviconUrl = (url: string) => {
+        try {
+            if (url.startsWith('about:')) return '/bastion.png';
+            const hostname = new URL(url).hostname;
+            return `https://www.google.com/s2/favicons?domain=${hostname}&sz=32`;
+        } catch (e) {
+            return '/bastion.png';
+        }
+    };
+
     const activeTab = tabs.find(t => t.id === activeTabId);
+
 
     return (
         <div className="app-container">
             <div className="browser-chrome">
                 <div className="tabs-bar">
                     {tabs.map(tab => (
-                        <div key={tab.id} className={`tab ${tab.id === activeTabId ? 'active' : ''}`} onClick={() => setActiveTabId(tab.id)}>
+                        <div key={tab.id} className={`tab ${tab.id === activeTabId ? 'active' : ''} ${isAIActive && tab.title.startsWith('[AI]') ? 'ai-tab' : ''}`} onClick={() => setActiveTabId(tab.id)}>
                             <div className="tab-content">
-                        {tab.isLoading ? <div className="spinner" /> : <img src="/bastion.png" className="tab-logo-icon" alt="B" />}
+                        {tab.isLoading ? <div className="spinner" /> : isAIActive && tab.title.startsWith('[AI]') ? <div className="ai-status-dot" /> : <img src={getFaviconUrl(tab.url)} className="tab-logo-icon" alt="" />}
                         <span className="tab-title">{tab.title}</span>
                     </div>
                             <button className="close-tab-btn" onClick={(e) => {
@@ -472,16 +592,20 @@ function App() {
                             }}><X size={14} /></button>
                         </div>
                     ))}
-                    <button onClick={() => sendMsg({ type: 'create_tab' })} className="new-tab-btn" title={t.new_tab}><Plus size={20} /></button>
+                    <button onClick={() => { sendMsg({ type: 'create_tab' }); setShowMCPDocs(false); }} className="new-tab-btn" title={t.new_tab}><Plus size={20} /></button>
                 </div>
+            </div>
 
-                <div className="navigation-bar">
+            <div className="navigation-bar">
                     <div className="nav-buttons">
                         <button className="icon-btn" title={t.back} onClick={() => sendMsg({ type: 'navigation_control', action: 'back' })}><ArrowLeft size={18} /></button>
                         <button className="icon-btn" title={t.forward} onClick={() => sendMsg({ type: 'navigation_control', action: 'forward' })}><ArrowRight size={18} /></button>
                         {activeTab?.isLoading ? <button className="icon-btn" title="Stop" onClick={handleStopLoading}><X size={18} /></button> : <button className="icon-btn" title={t.reload} onClick={() => sendMsg({ type: 'navigation_control', action: 'reload' })}><RotateCw size={18} /></button>}
-                        <button className="icon-btn" title="Home" onClick={() => sendMsg({ type: 'navigate', url: 'about:blank' })}><Home size={18} /></button>
-                        <button className={`icon-btn ${showDownloads ? 'active' : ''}`} title={t.downloads} onClick={() => { setShowDownloads(!showDownloads); setShowSettings(false); }}>
+                        <button className="icon-btn" title="Home" onClick={() => { sendMsg({ type: 'navigate', url: 'about:blank' }); setShowMCPDocs(false); }}><Home size={18} /></button>
+                        <button className={`icon-btn ${showMCPDocs ? 'active' : ''}`} title={t.mcp_docs} onClick={() => { setShowMCPDocs(!showMCPDocs); setShowDownloads(false); setShowSettings(false); }}>
+                            <Cpu size={18} />
+                        </button>
+                        <button className={`icon-btn ${showDownloads ? 'active' : ''}`} title={t.downloads} onClick={() => { setShowDownloads(!showDownloads); setShowSettings(false); setShowMCPDocs(false); }}>
                             <Download size={18} />
                             {downloads.length > 0 && <span className="badge">{downloads.length}</span>}
                         </button>
@@ -490,16 +614,46 @@ function App() {
                     <form onSubmit={handleNavigate} className="url-bar-container">
                         {urlInput.startsWith('https') ? <Lock size={14} color="#10b981" /> : <Search size={14} />}
                         <input type="text" value={urlInput === 'about:blank' ? '' : urlInput} onChange={e => setUrlInput(e.target.value)} onFocus={(e) => e.target.select()} placeholder={t.search_placeholder} className="url-input" disabled={!isConnected} />
+                        {activeTab && activeTab.url !== 'about:blank' && (
+                            <button 
+                                type="button" 
+                                className={`icon-btn bookmark-btn ${bookmarks.some(b => b.url === activeTab.url) ? 'active' : ''}`} 
+                                onClick={(e) => { e.stopPropagation(); toggleBookmark(); }}
+                                title={t.save_bookmark}
+                            >
+                                <Star size={16} fill={bookmarks.some(b => b.url === activeTab.url) ? "currentColor" : "none"} />
+                            </button>
+                        )}
                     </form>
                 </div>
-            </div>
 
-            <div className="viewport-container" ref={containerRef} onWheel={(e) => sendMsg({ type: 'mouse_event', event: 'wheel', deltaY: e.deltaY })}>
-                {imageSrc && isConnected && activeTab && activeTab.url !== 'about:blank' ? (
+                {bookmarks.length > 0 && (
+                    <div className="bookmarks-bar">
+                        {bookmarks.map(bookmark => (
+                            <div 
+                                key={bookmark.id} 
+                                className="bookmark-item" 
+                                onClick={() => sendMsg({ type: 'navigate', url: bookmark.url })}
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    setBookmarkContextMenu({ x: e.clientX, y: e.clientY, bookmark });
+                                }}
+                            >
+                                <img src={getFaviconUrl(bookmark.url)} alt="" className="bookmark-favicon" />
+                                <span className="bookmark-title">{bookmark.title}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+            <div className={`viewport-container ${isAIActive ? 'ai-active-frame' : ''}`} ref={containerRef} onWheel={(e) => sendMsg({ type: 'mouse_event', event: 'wheel', deltaY: e.deltaY })}>
+                {showMCPDocs ? (
+                    <MCPDocs language={language} />
+                ) : imageSrc && isConnected && activeTab && activeTab.url !== 'about:blank' ? (
                     <img ref={imgRef} src={imageSrc} alt="Remote Viewport" className="remote-viewport" onMouseMove={(e) => sendMouse('mousemove', e)} onMouseDown={(e) => { if (e.button !== 2) { setContextMenu(null); sendMouse('mousedown', e, { button: e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right' }); } }} onMouseUp={(e) => { if (e.button !== 2) sendMouse('mouseup', e, { button: e.button === 0 ? 'left' : e.button === 1 ? 'middle' : 'right' }); }} onContextMenu={handleContextMenu} draggable={false} />
                 ) : (
                     <div className="overlay-content">
-                        <WelcomePage language={language} onNavigate={(url) => sendMsg({ type: 'navigate', url })} />
+                        <WelcomePage language={language} onNavigate={(url) => { sendMsg({ type: 'navigate', url }); setShowMCPDocs(false); }} onShowMCP={() => setShowMCPDocs(true)} />
                         {!isConnected && (
                             <div className="login-overlay">
                                 <div className="login-card">
@@ -592,6 +746,53 @@ function App() {
                                 <p className="setting-hint">{t.lang_hint}</p>
                             </div>
                             <div className="setting-group">
+                                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Shield size={16} /> {t.vt_analyze_downloads}</span>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={vtAnalyzeDownloads} 
+                                        onChange={(e) => {
+                                            const val = e.target.checked;
+                                            setVtAnalyzeDownloads(val);
+                                            localStorage.setItem('vt-analyze-downloads', String(val));
+                                            if (isConnected) sendMsg({ type: 'update_config', config: { vtAnalyzeDownloads: val } });
+                                        }}
+                                    />
+                                </label>
+                            </div>
+                            <div className="setting-group">
+                                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', cursor: 'pointer' }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Search size={16} /> {t.vt_analyze_urls}</span>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={vtAnalyzeUrls} 
+                                        onChange={(e) => {
+                                            const val = e.target.checked;
+                                            setVtAnalyzeUrls(val);
+                                            localStorage.setItem('vt-analyze-urls', String(val));
+                                            if (isConnected) sendMsg({ type: 'update_config', config: { vtAnalyzeUrls: val } });
+                                        }}
+                                    />
+                                </label>
+                            </div>
+                            <div className="setting-group">
+                                <label><Key size={16} /> VirusTotal API Key (Vault)</label>
+                                <div className="api-key-input">
+                                    <input 
+                                        type="password" 
+                                        placeholder="VT API Key..." 
+                                        onBlur={(e) => {
+                                            if (e.target.value && isConnected) {
+                                                sendMsg({ type: 'save_vt_key', key: e.target.value });
+                                                e.target.value = ''; // Clear for security
+                                                alert('Clave guardada en la bóveda cifrada.');
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <p className="setting-hint">Se guarda cifrada y solo es accesible por el Bastión.</p>
+                            </div>
+                            <div className="setting-group">
                                 <label><Key size={16} /> {t.key_label}</label>
                                 <div className="api-key-input">
                                     <input type={showApiKey ? 'text' : 'password'} placeholder={apiKey ? '••••••••••••••••' : t.key_placeholder} value={tempApiKey} onChange={(e) => setTempApiKey(e.target.value)} />
@@ -617,9 +818,65 @@ function App() {
                         <div className="context-menu-item" onClick={() => sendMsg({ type: 'navigation_control', action: 'back' })}><ArrowLeft size={16} /> {t.back}</div>
                         <div className="context-menu-item" onClick={() => sendMsg({ type: 'navigation_control', action: 'forward' })}><ArrowRight size={16} /> {t.forward}</div>
                         <div className="context-menu-item" onClick={() => sendMsg({ type: 'navigation_control', action: 'reload' })}><RotateCw size={16} /> {t.reload}</div>
+                        <div className="context-menu-item" onClick={() => { sendMsg({ type: 'manual_file_request' }); setContextMenu(null); }}><Upload size={16} /> {t.upload_file}</div>
                         {contextMenu.info?.url && <div className="context-menu-separator"></div>}
                         {contextMenu.info?.type === 'link' && <div className="context-menu-item" onClick={() => { sendMsg({ type: 'create_tab', url: contextMenu.info.url }); setContextMenu(null); }}><ExternalLink size={14} /> Open in New Tab</div>}
                         {(contextMenu.info?.type === 'image' || contextMenu.info?.type === 'link') && <div className="context-menu-item" onClick={() => { sendMsg({ type: 'download_url', url: contextMenu.info.url }); setContextMenu(null); setShowDownloads(true); }}><Download size={14} /> Download</div>}
+                    </div>
+                )}
+
+                {bookmarkContextMenu && (
+                    <div className="context-menu" style={{ top: bookmarkContextMenu.y, left: bookmarkContextMenu.x }}>
+                        <div className="context-menu-item" onClick={() => { setEditingBookmark(bookmarkContextMenu.bookmark); setBookmarkContextMenu(null); }}>
+                            <Edit3 size={14} /> {t.edit_bookmark}
+                        </div>
+                        <div className="context-menu-item" style={{ color: '#ef4444' }} onClick={() => { setBookmarks(prev => prev.filter(b => b.id !== bookmarkContextMenu.bookmark.id)); setBookmarkContextMenu(null); }}>
+                            <Trash2 size={14} /> {t.delete_bookmark}
+                        </div>
+                    </div>
+                )}
+
+                {editingBookmark && (
+                    <div className="login-overlay light" style={{ zIndex: 10001 }}>
+                        <div className="login-card light-card" style={{ maxWidth: '400px' }}>
+                            <div className="downloads-header" style={{ border: 'none', padding: '0 0 20px 0' }}>
+                                <h3>{t.edit_bookmark}</h3>
+                                <button onClick={() => setEditingBookmark(null)} className="icon-btn"><X size={16} /></button>
+                            </div>
+                            <div className="settings-content" style={{ padding: 0 }}>
+                                <div className="setting-group">
+                                    <label>{t.bookmark_title}</label>
+                                    <div className="api-key-input">
+                                        <input 
+                                            type="text" 
+                                            value={editingBookmark.title} 
+                                            onChange={(e) => setEditingBookmark({ ...editingBookmark, title: e.target.value })} 
+                                        />
+                                    </div>
+                                </div>
+                                <div className="setting-group">
+                                    <label>{t.bookmark_url}</label>
+                                    <div className="api-key-input">
+                                        <input 
+                                            type="text" 
+                                            value={editingBookmark.url} 
+                                            onChange={(e) => setEditingBookmark({ ...editingBookmark, url: e.target.value })} 
+                                        />
+                                    </div>
+                                </div>
+                                <div className="settings-footer" style={{ marginTop: '10px' }}>
+                                    <button 
+                                        className="primary-btn" 
+                                        onClick={() => {
+                                            setBookmarks(prev => prev.map(b => b.id === editingBookmark.id ? editingBookmark : b));
+                                            setEditingBookmark(null);
+                                        }}
+                                    >
+                                        {t.save}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
